@@ -9,6 +9,9 @@ import base64
 import ws
 import std/sha1
 
+export net.Port
+
+
 type
   HttpVersion* = enum
     HttpVer11,
@@ -212,7 +215,7 @@ proc add*(headers: HttpHeaders, key, value: string) =
   else:
     headers.table[key.toLowerAscii].add(value)
 
-proc addMany*(headers: HttpHeaders, key:string, value: seq[string]) = 
+proc addMany*(headers: HttpHeaders, key:string, value: seq[string]) =
   for val in value:
     headers.add(key, val)
 
@@ -358,7 +361,7 @@ proc `$`(this: FormMultiPart): string =
 proc hasKey(this: FormMultiPart, key: string): bool =
     result = this.parts.hasKey(key)
 
-proc getPart*(this: FormMultiPart, name: string): Option[FormPart] = 
+proc getPart*(this: FormMultiPart, name: string): Option[FormPart] =
     if this.hasKey(name):
         return some(this.parts[name])
     return none(FormPart)
@@ -368,7 +371,7 @@ proc getValueOrNone*(this: FormMultiPart, name: string): Option[string] =
     if this.hasKey(name):
         echo fmt"key ${name} exists in ${this}"
         return some(this.parts[name].body.strip)
-        
+
     return none(string)
 
 proc getValue*(this: FormMultiPart, name: string):string =
@@ -401,7 +404,7 @@ proc `$`*(r: Request): string =
   result.add "URLParams: " & $r.urlParams
   result.add "FormData: " & $r.formData
   result.add "***************************"
-  
+
 proc fullInfo*(r: Request) =
   echo "*******RequestInfo*******"
   echo "Path: " & r.path
@@ -419,8 +422,8 @@ proc fullInfo*(r: Request) =
 type Response* = ref object
   headers: HttpHeaders
   httpver: HttpVersion
-  code: HttpCode
-  content: string
+  code*: HttpCode
+  content*: string
 
 
 proc newResponse*(): Response =
@@ -527,9 +530,9 @@ proc addRoute*(router: var Router, route: string, handler: HandlerFunc, httpMeth
 
 
 type ServerOptions* = object
-  address: string
-  port: Port
-  debug: bool
+  address*: string
+  port*: Port
+  debug*: bool
 
 type Servy = object
   options: ServerOptions
@@ -613,7 +616,7 @@ received request from client: (httpMethod: HttpPost, requestURI: "", httpVersion
             kv = parseHeader(line, sep=';')
           else:
             kv = parseHeader(line)
-        
+
           part.headers.addMany(kv.key, kv.value)
           if "content-disposition" in kv.key.toLowerAscii:
             for v in kv.value:
@@ -676,7 +679,7 @@ proc parseRequestFromConnection(s: Servy, conn:AsyncSocket): Future[Request] {.a
 
     if "?" in path:
       # has query params
-      # todo use decodeFields from cgi 
+      # todo use decodeFields from cgi
       result.queryParams = parseQueryParams(path)
 
 
@@ -755,22 +758,22 @@ proc initServy*(options: ServerOptions, router: Router, middlewares:seq[Middlewa
   result.sock = newAsyncSocket()
   result.sock.setSockOpt(OptReuseAddr, true)
 
-template logMsg(m: string) : untyped = 
+template logMsg(m: string) : untyped =
   if s.options.debug:
     echo m
-  
+
 proc handleClient*(s: Servy, client: AsyncSocket) {.async.} =
   var req = await s.parseRequestFromConnection(client)
   var res = newResponse()
   res.headers = newHttpHeaders()
-  
+
   for  m in s.middlewares:
     let usenextmiddleware = await m(req, res)
     if not usenextmiddleware:
       logMsg "early return from middleware..."
       await client.send(res.format())
       return
-  
+
   logMsg "received request from client: " & $req
 
   let (routeHandler, params) = s.router.getByPath(req.path, req.httpMethod)
@@ -790,8 +793,8 @@ proc handleClient*(s: Servy, client: AsyncSocket) {.async.} =
   try:
     await handler(req, res)
   except Exception:
-      echo getCurrentExceptionMsg() 
-  
+      echo getCurrentExceptionMsg()
+
   logMsg "reached the handler safely.. and executing now."
   await client.send(res.format())
 #   echo $req.formData
@@ -820,7 +823,7 @@ proc ip*(req: Request): string =
   if headers.hasKey("REMOTE_ADDR"):
     result = headers["REMOTE_ADDR"][0]
   if headers.hasKey("x-forwarded-for"):
-    result = headers["x-forwarded-for"][0] 
+    result = headers["x-forwarded-for"][0]
 
 proc params*(req: Request): Table[string, string] =
   ## Parameters from the pattern and the query string.
@@ -854,12 +857,12 @@ proc stripLeadingSlashes(s: string): string =
     if s[idx] == '/':
       inc idx
     else:
-      break  
+      break
   s[idx..^1]
 
 proc newStaticMiddleware*(dir: string, onRoute="/public"): proc(request: Request, response: Response): Future[bool] {.async, closure, gcsafe.} =
   result = proc(request: Request, response: Response): Future[bool] {.async, closure, gcsafe.} =
-    
+
     # TODO:
     # check for method to be get/head
     # check for suitable caching headers
@@ -922,10 +925,10 @@ proc basicAuth*(users: Table[string, string], realm="private", text="Access deni
     let authHeader = request.headers.getOrDefault("authorization", @[""])[0]
 
     var found = authHeader in processedUsers
-      
+
     if not found or authHeader.len == 0:
       let realmstring = '"' & realm & '"'
-      response.headers.add("WWW-Authenticate", fmt"Basic realm={realmstring}") 
+      response.headers.add("WWW-Authenticate", fmt"Basic realm={realmstring}")
       response.abortWith("Access denied", Http401)
       return false
     else:
@@ -940,7 +943,7 @@ proc handshake*(ws: WebSocket, headers: HttpHeaders) {.async.} =
   if headers.hasKey("Sec-WebSocket-Protocol"):
     ws.protocol = headers["Sec-WebSocket-Protocol"][0].strip()
 
-  let 
+  let
     sh = secureHash(ws.key & "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
     acceptKey = base64.encode(decodeBase16($sh))
 
@@ -960,27 +963,27 @@ proc newServyWebSocket*(req: Request): Future[WebSocket] {.async.} =
   ## Creates a new socket from an httpbeast request.
   try:
       let headers = req.headers
-  
+
       if not headers.hasKey("Sec-WebSocket-Version"):
         discard req.asyncSock.send(formatResponse(Http404, HttpVer11, "Not Found", headers))
         raise newException(WebSocketError, "Not a valid websocket handshake.")
-  
+
       var ws = WebSocket()
       ws.masked = false
-  
+
       # Here is the magic:
       # req.forget() # Remove from HttpBeast event loop.
       let fd = req.asyncSock.getFd
        #   asyncdispatch.register(req.asyncSock.AsyncFD)  # Add to async event loop.
-      
+
       ws.tcpSocket = newAsyncSocket(fd.AsyncFD)
       await ws.handshake(headers)
       return ws
-  
+
   except ValueError, KeyError:
       # Wrap all exceptions in a WebSocketError so its easy to catch
       raise newException(
-      WebSocketError, 
+      WebSocketError,
       "Failed to create WebSocket from request: " & getCurrentExceptionMsg()
       )
 
@@ -1012,7 +1015,7 @@ when isMainModule:
       res.content = "generic greet" & $req
       if "username" in req.urlParams:
         echo "username is: " & req.urlParams["username"]
-      
+
       if "first" in req.urlParams:
         echo "first is: " & req.urlParams["first"]
 
@@ -1070,5 +1073,4 @@ when isMainModule:
 
     let opts = ServerOptions(address:"127.0.0.1", port:9000.Port, debug:true)
     var s = initServy(opts, router, @[serveTmpDir, serveHomeDir, loggingMiddleware, trimTrailingSlash])
-    s.run() 
-    
+    s.run()

@@ -48,7 +48,7 @@ using curl or your web browser go to localhost:9000/hello
 
 ```
 ➜  servy git:(master) ✗ curl localhost:9000/hello
-hello world from handler /hello%    
+hello world from handler /hello%
 ```
 
 
@@ -62,7 +62,7 @@ hello world from handler /hello%
       res.content = "generic greet" & $req
       if "username" in req.urlParams:
         echo "username is: " & req.urlParams["username"]
-      
+
       if "first" in req.urlParams:
         echo "first is: " & req.urlParams["first"]
 
@@ -84,9 +84,9 @@ hello world from handler /hello%
 - `pat` route pattern
 - `handlerFunc` to execute on match
 - `httpMethod` to only execute on a certain http method
-- `middlewares` list of middlewares to execute before request (for specific route) 
+- `middlewares` list of middlewares to execute before request (for specific route)
 the captured route variables are available in `req.urlParams` table
-  
+
 
 ### Handling different HTTP methods
 
@@ -115,8 +115,17 @@ proc handleAbort(req: Request, res: Response) : Future[void] {.async.} =
 router.addRoute("/abort", handleAbort, HttpGet)
 
 ```
-response object has `abortWith` proc available 
+response object has `abortWith` proc available
 
+`abortWith` does not actually return from the calling procedure. If you want to force the request to return immediately you can raise an `HttpException`.
+
+```nim
+proc handleAbort(req: var Request, res: var Response) =
+  raise newHttpException("Improperly attired, aborting", Http400)
+
+router.addRoute("/abort", handleAbort, HttpGet)
+
+```
 
 ### Redirect
 
@@ -197,10 +206,10 @@ proc basicAuth*(users: Table[string, string], realm="private", text="Access deni
     let authHeader = request.headers.getOrDefault("authorization", @[""])[0]
 
     var found = authHeader in processedUsers
-      
+
     if not found or authHeader.len == 0:
       let realmstring = '"' & realm & '"'
-      response.headers.add("WWW-Authenticate", fmt"Basic realm={realmstring}") 
+      response.headers.add("WWW-Authenticate", fmt"Basic realm={realmstring}")
       response.abortWith("Access denied", Http401)
       return false
     else:
@@ -250,7 +259,7 @@ proc main(): Future[void]{.async.} =
 waitFor main()
 ```
 
-or from javascript 
+or from javascript
 
 ```javascript
 > ws = new WebSocket("ws://127.0.0.1:9000/ws")

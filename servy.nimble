@@ -6,6 +6,7 @@ description   = "a down to earth webframework in nim"
 license       = "MIT"
 srcDir        = "src"
 bin           = @["servy"]
+installDirs   = @["."]
 
 
 
